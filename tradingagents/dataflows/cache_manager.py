@@ -43,12 +43,15 @@ class StockDataCache:
         self.china_news_dir = self.cache_dir / "china_news"
         self.us_fundamentals_dir = self.cache_dir / "us_fundamentals"
         self.china_fundamentals_dir = self.cache_dir / "china_fundamentals"
+        self.sw_index_dir = self.cache_dir / "sw_index"  # 申万指数数据目录
+        self.sw_industry_dir = self.cache_dir / "sw_industry"  # 申万行业数据目录
         self.metadata_dir = self.cache_dir / "metadata"
 
         # 创建所有目录
         for dir_path in [self.us_stock_dir, self.china_stock_dir, self.us_news_dir,
                         self.china_news_dir, self.us_fundamentals_dir,
-                        self.china_fundamentals_dir, self.metadata_dir]:
+                        self.china_fundamentals_dir, self.sw_index_dir, 
+                        self.sw_industry_dir, self.metadata_dir]:
             dir_path.mkdir(exist_ok=True)
 
         # 缓存配置 - 针对不同市场设置不同的TTL
@@ -82,6 +85,21 @@ class StockDataCache:
                 'ttl_hours': 12,  # A股基本面数据缓存12小时
                 'max_files': 200,
                 'description': 'A股基本面数据'
+            },
+            'sw_index_data': {
+                'ttl_hours': 4,  # 申万指数数据缓存4小时（行业指数相对稳定）
+                'max_files': 100,
+                'description': '申万指数历史数据'
+            },
+            'sw_industry_data': {
+                'ttl_hours': 6,  # 申万行业分类数据缓存6小时（分类相对稳定）
+                'max_files': 50,
+                'description': '申万行业分类数据'
+            },
+            'sw_components_data': {
+                'ttl_hours': 12,  # 申万行业成份股数据缓存12小时（成份股变化较少）
+                'max_files': 200,
+                'description': '申万行业成份股数据'
             }
         }
 
@@ -89,11 +107,20 @@ class StockDataCache:
         logger.info(f"🗄️ 数据库缓存管理器初始化完成")
         logger.info(f"   美股数据: ✅ 已配置")
         logger.info(f"   A股数据: ✅ 已配置")
+        logger.info(f"   申万指数: ✅ 已配置")
+        logger.info(f"   申万行业: ✅ 已配置")
 
     def _determine_market_type(self, symbol: str) -> str:
-        """根据股票代码确定市场类型"""
+        """根据股票代码/指数代码确定市场类型"""
         import re
 
+        # 判断是否为申万指数（SW开头）
+        if str(symbol).upper().startswith('SW'):
+            return 'sw_index'
+        
+        # 判断是否为申万行业分类（数字格式的行业代码）
+        if re.match(r'^[1-9]\d{2,3}$', str(symbol)):  # 3-4位数字的行业代码
+            return 'sw_industry'
 
         # 判断是否为中国A股（6位数字）
         if re.match(r'^\d{6}$', str(symbol)):
@@ -127,6 +154,12 @@ class StockDataCache:
             base_dir = self.china_news_dir if market_type == 'china' else self.us_news_dir
         elif data_type == "fundamentals":
             base_dir = self.china_fundamentals_dir if market_type == 'china' else self.us_fundamentals_dir
+        elif data_type == "sw_index_data":
+            base_dir = self.sw_index_dir
+        elif data_type == "sw_industry_data":
+            base_dir = self.sw_industry_dir
+        elif data_type == "sw_components_data":
+            base_dir = self.sw_industry_dir  # 成份股数据也存储在行业目录
         else:
             base_dir = self.cache_dir
 
@@ -495,6 +528,230 @@ class StockDataCache:
         
         stats['total_size_mb'] = round(stats['total_size_mb'], 2)
         return stats
+    
+    def save_sw_index_data(self, symbol: str, data: Union[pd.DataFrame, str],
+                          start_date: str = None, end_date: str = None,
+                          data_source: str = "akshare") -> str:
+        """
+        保存申万指数数据到缓存
+
+        Args:
+            symbol: 申万指数代码（如：SW801010）
+            data: 申万指数数据（DataFrame或字符串）
+            start_date: 开始日期
+            end_date: 结束日期
+            data_source: 数据源（默认为akshare）
+
+        Returns:
+            cache_key: 缓存键
+        """
+        cache_key = self._generate_cache_key("sw_index_data", symbol,
+                                           start_date=start_date,
+                                           end_date=end_date,
+                                           source=data_source)
+
+        # 保存数据
+        if isinstance(data, pd.DataFrame):
+            cache_path = self._get_cache_path("sw_index_data", cache_key, "csv", symbol)
+            data.to_csv(cache_path, index=True)
+        else:
+            cache_path = self._get_cache_path("sw_index_data", cache_key, "txt", symbol)
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                f.write(str(data))
+
+        # 保存元数据
+        metadata = {
+            'symbol': symbol,
+            'data_type': 'sw_index_data',
+            'market_type': 'sw_index',
+            'start_date': start_date,
+            'end_date': end_date,
+            'data_source': data_source,
+            'file_path': str(cache_path),
+            'file_format': 'csv' if isinstance(data, pd.DataFrame) else 'txt'
+        }
+        self._save_metadata(cache_key, metadata)
+
+        desc = self.cache_config.get('sw_index_data', {}).get('description', '申万指数数据')
+        logger.info(f"💾 {desc}已缓存: {symbol} ({data_source}) -> {cache_key}")
+        return cache_key
+    
+    def load_sw_index_data(self, cache_key: str) -> Optional[Union[pd.DataFrame, str]]:
+        """从缓存加载申万指数数据"""
+        metadata = self._load_metadata(cache_key)
+        if not metadata:
+            return None
+        
+        cache_path = Path(metadata['file_path'])
+        if not cache_path.exists():
+            return None
+        
+        try:
+            if metadata['file_format'] == 'csv':
+                return pd.read_csv(cache_path, index_col=0)
+            else:
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+        except Exception as e:
+            logger.error(f"⚠️ 加载申万指数缓存数据失败: {e}")
+            return None
+    
+    def find_cached_sw_index_data(self, symbol: str, start_date: str = None,
+                                 end_date: str = None, data_source: str = None,
+                                 max_age_hours: int = None) -> Optional[str]:
+        """
+        查找匹配的申万指数缓存数据
+
+        Args:
+            symbol: 申万指数代码
+            start_date: 开始日期
+            end_date: 结束日期
+            data_source: 数据源
+            max_age_hours: 最大缓存时间（小时），None时使用智能配置
+
+        Returns:
+            cache_key: 如果找到有效缓存则返回缓存键，否则返回None
+        """
+        # 如果没有指定TTL，使用智能配置
+        if max_age_hours is None:
+            max_age_hours = self.cache_config.get('sw_index_data', {}).get('ttl_hours', 4)
+
+        # 生成查找键
+        search_key = self._generate_cache_key("sw_index_data", symbol,
+                                            start_date=start_date,
+                                            end_date=end_date,
+                                            source=data_source)
+
+        # 检查精确匹配
+        if self.is_cache_valid(search_key, max_age_hours, symbol, 'sw_index_data'):
+            desc = self.cache_config.get('sw_index_data', {}).get('description', '申万指数数据')
+            logger.info(f"🎯 找到精确匹配的{desc}: {symbol} -> {search_key}")
+            return search_key
+
+        # 如果没有精确匹配，查找部分匹配
+        for metadata_file in self.metadata_dir.glob(f"*_meta.json"):
+            try:
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+                if (metadata.get('symbol') == symbol and
+                    metadata.get('data_type') == 'sw_index_data' and
+                    (data_source is None or metadata.get('data_source') == data_source)):
+
+                    cache_key = metadata_file.stem.replace('_meta', '')
+                    if self.is_cache_valid(cache_key, max_age_hours, symbol, 'sw_index_data'):
+                        desc = self.cache_config.get('sw_index_data', {}).get('description', '申万指数数据')
+                        logger.info(f"📋 找到部分匹配的{desc}: {symbol} -> {cache_key}")
+                        return cache_key
+            except Exception:
+                continue
+
+        desc = self.cache_config.get('sw_index_data', {}).get('description', '申万指数数据')
+        logger.error(f"❌ 未找到有效的{desc}缓存: {symbol}")
+        return None
+    
+    def save_sw_industry_data(self, data_type: str, data: Union[pd.DataFrame, str],
+                             data_key: str = None, data_source: str = "akshare") -> str:
+        """
+        保存申万行业数据到缓存（如行业分类、成份股等）
+
+        Args:
+            data_type: 数据类型（sw_industry_data或sw_components_data）
+            data: 行业数据（DataFrame或字符串）
+            data_key: 数据键（如行业代码、行业名称等）
+            data_source: 数据源（默认为akshare）
+
+        Returns:
+            cache_key: 缓存键
+        """
+        cache_key = self._generate_cache_key(data_type, data_key or "all",
+                                           source=data_source,
+                                           date=datetime.now().strftime("%Y-%m-%d"))
+
+        # 保存数据
+        if isinstance(data, pd.DataFrame):
+            cache_path = self._get_cache_path(data_type, cache_key, "csv")
+            data.to_csv(cache_path, index=True)
+        else:
+            cache_path = self._get_cache_path(data_type, cache_key, "txt")
+            with open(cache_path, 'w', encoding='utf-8') as f:
+                f.write(str(data))
+
+        # 保存元数据
+        metadata = {
+            'data_key': data_key,
+            'data_type': data_type,
+            'market_type': 'sw_industry',
+            'data_source': data_source,
+            'file_path': str(cache_path),
+            'file_format': 'csv' if isinstance(data, pd.DataFrame) else 'txt'
+        }
+        self._save_metadata(cache_key, metadata)
+
+        desc = self.cache_config.get(data_type, {}).get('description', '申万行业数据')
+        logger.info(f"💾 {desc}已缓存: {data_key} ({data_source}) -> {cache_key}")
+        return cache_key
+    
+    def load_sw_industry_data(self, cache_key: str) -> Optional[Union[pd.DataFrame, str]]:
+        """从缓存加载申万行业数据"""
+        metadata = self._load_metadata(cache_key)
+        if not metadata:
+            return None
+        
+        cache_path = Path(metadata['file_path'])
+        if not cache_path.exists():
+            return None
+        
+        try:
+            if metadata['file_format'] == 'csv':
+                return pd.read_csv(cache_path, index_col=0)
+            else:
+                with open(cache_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+        except Exception as e:
+            logger.error(f"⚠️ 加载申万行业缓存数据失败: {e}")
+            return None
+    
+    def find_cached_sw_industry_data(self, data_type: str, data_key: str = None,
+                                    data_source: str = None, max_age_hours: int = None) -> Optional[str]:
+        """
+        查找匹配的申万行业缓存数据
+
+        Args:
+            data_type: 数据类型（sw_industry_data或sw_components_data）
+            data_key: 数据键
+            data_source: 数据源
+            max_age_hours: 最大缓存时间（小时），None时使用智能配置
+
+        Returns:
+            cache_key: 如果找到有效缓存则返回缓存键，否则返回None
+        """
+        # 如果没有指定TTL，使用智能配置
+        if max_age_hours is None:
+            max_age_hours = self.cache_config.get(data_type, {}).get('ttl_hours', 6)
+
+        # 查找匹配的缓存
+        for metadata_file in self.metadata_dir.glob(f"*_meta.json"):
+            try:
+                with open(metadata_file, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+
+                if (metadata.get('data_type') == data_type and
+                    metadata.get('market_type') == 'sw_industry' and
+                    (data_key is None or metadata.get('data_key') == data_key) and
+                    (data_source is None or metadata.get('data_source') == data_source)):
+
+                    cache_key = metadata_file.stem.replace('_meta', '')
+                    if self.is_cache_valid(cache_key, max_age_hours):
+                        desc = self.cache_config.get(data_type, {}).get('description', '申万行业数据')
+                        logger.info(f"🎯 找到匹配的{desc}缓存: {data_key} ({data_source}) -> {cache_key}")
+                        return cache_key
+            except Exception:
+                continue
+
+        desc = self.cache_config.get(data_type, {}).get('description', '申万行业数据')
+        logger.error(f"❌ 未找到有效的{desc}缓存: {data_key} ({data_source})")
+        return None
 
 
 # 全局缓存实例

@@ -236,7 +236,6 @@ class AKShareProvider:
             # 尝试获取港股实时行情数据来获取基本信息
             # 使用线程超时包装（兼容Windows）
             import threading
-            import time
 
 
             result = [None]
@@ -407,6 +406,356 @@ class AKShareProvider:
         except Exception as e:
             logger.error(f"❌ AKShare获取{symbol}财务数据失败: {e}")
             return {}
+
+    def get_sw_index_hist(self, symbol: str, period: str = "day") -> Optional[pd.DataFrame]:
+        """
+        获取申万指数历史行情数据
+        
+        Args:
+            symbol: 申万指数代码（如：801010, 801193）
+            period: 数据周期（"day", "week", "month"）
+        
+        Returns:
+            pd.DataFrame: 申万指数历史行情数据
+        """
+        if not self.connected:
+            logger.error(f"❌ AKShare未连接，无法获取申万指数数据")
+            return None
+
+        try:
+            logger.info(f"📊 AKShare获取申万指数历史数据: {symbol}, 周期: {period}")
+
+            # 使用线程超时包装
+            import threading
+            result = [None]
+            exception = [None]
+
+            def fetch_sw_index_data():
+                try:
+                    result[0] = self.ak.index_hist_sw(symbol=symbol, period=period)
+                except Exception as e:
+                    exception[0] = e
+
+            # 启动线程
+            thread = threading.Thread(target=fetch_sw_index_data)
+            thread.daemon = True
+            thread.start()
+
+            # 等待60秒
+            thread.join(timeout=60)
+
+            if thread.is_alive():
+                logger.warning(f"⚠️ AKShare申万指数历史数据获取超时（60秒）: {symbol}")
+                raise Exception(f"申万指数历史数据获取超时（60秒）: {symbol}")
+            elif exception[0]:
+                raise exception[0]
+            else:
+                data = result[0]
+
+            if data is not None and not data.empty:
+                # 数据预处理
+                data = data.reset_index()
+                data['Symbol'] = symbol  # 添加股票代码
+
+                # 标准化列名
+                column_mapping = {
+                    '日期': 'Date',
+                    '开盘': 'Open',
+                    '收盘': 'Close',
+                    '最高': 'High',
+                    '最低': 'Low',
+                    '成交量': 'Volume',
+                    '成交额': 'Amount'
+                }
+
+                for old_col, new_col in column_mapping.items():
+                    if old_col in data.columns:
+                        data = data.rename(columns={old_col: new_col})
+
+                logger.info(f"✅ AKShare申万指数数据获取成功: {symbol}, {len(data)}条记录")
+                return data
+            else:
+                logger.warning(f"⚠️ AKShare申万指数数据为空: {symbol}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ AKShare获取申万指数数据失败: {symbol}, 错误: {e}")
+            return None
+
+    def get_sw_index_min(self, symbol: str) -> Optional[pd.DataFrame]:
+        """
+        获取申万指数分时行情数据
+        
+        Args:
+            symbol: 申万指数代码（如：801010, 801193）
+        
+        Returns:
+            pd.DataFrame: 申万指数分时行情数据
+        """
+        if not self.connected:
+            logger.error(f"❌ AKShare未连接，无法获取申万指数分时数据")
+            return None
+
+        try:
+            logger.info(f"📊 AKShare获取申万指数分时数据: {symbol}")
+
+            # 使用线程超时包装
+            import threading
+            result = [None]
+            exception = [None]
+
+            def fetch_sw_min_data():
+                try:
+                    result[0] = self.ak.index_min_sw(symbol=symbol)
+                except Exception as e:
+                    exception[0] = e
+
+            # 启动线程
+            thread = threading.Thread(target=fetch_sw_min_data)
+            thread.daemon = True
+            thread.start()
+
+            # 等待30秒
+            thread.join(timeout=30)
+
+            if thread.is_alive():
+                logger.warning(f"⚠️ AKShare申万指数分时数据获取超时（30秒）: {symbol}")
+                raise Exception(f"申万指数分时数据获取超时（30秒）: {symbol}")
+            elif exception[0]:
+                raise exception[0]
+            else:
+                data = result[0]
+
+            if data is not None and not data.empty:
+                # 数据预处理
+                data = data.reset_index()
+                data['Symbol'] = symbol
+
+                logger.info(f"✅ AKShare申万指数分时数据获取成功: {symbol}, {len(data)}条记录")
+                return data
+            else:
+                logger.warning(f"⚠️ AKShare申万指数分时数据为空: {symbol}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ AKShare获取申万指数分时数据失败: {symbol}, 错误: {e}")
+            return None
+
+    def get_sw_components(self, symbol: str) -> Optional[pd.DataFrame]:
+        """
+        获取申万指数成分股数据
+        
+        Args:
+            symbol: 申万指数代码（如：801010, 801193）
+        
+        Returns:
+            pd.DataFrame: 申万指数成分股数据
+        """
+        if not self.connected:
+            logger.error(f"❌ AKShare未连接，无法获取申万指数成分股数据")
+            return None
+
+        try:
+            logger.info(f"📊 AKShare获取申万指数成分股数据: {symbol}")
+
+            # 使用线程超时包装
+            import threading
+            result = [None]
+            exception = [None]
+
+            def fetch_sw_components_data():
+                try:
+                    result[0] = self.ak.index_component_sw(symbol=symbol)
+                except Exception as e:
+                    exception[0] = e
+
+            # 启动线程
+            thread = threading.Thread(target=fetch_sw_components_data)
+            thread.daemon = True
+            thread.start()
+
+            # 等待60秒
+            thread.join(timeout=60)
+
+            if thread.is_alive():
+                logger.warning(f"⚠️ AKShare申万指数成分股数据获取超时（60秒）: {symbol}")
+                raise Exception(f"申万指数成分股数据获取超时（60秒）: {symbol}")
+            elif exception[0]:
+                raise exception[0]
+            else:
+                data = result[0]
+
+            if data is not None and not data.empty:
+                # 数据预处理
+                data = data.reset_index()
+                data['Index_Symbol'] = symbol  # 添加指数代码
+
+                # 标准化列名
+                column_mapping = {
+                    '序号': 'Rank',
+                    '证券代码': 'Code',
+                    '证券名称': 'Name',
+                    '最新权重': 'Weight',
+                    '计入日期': 'Date'
+                }
+
+                for old_col, new_col in column_mapping.items():
+                    if old_col in data.columns:
+                        data = data.rename(columns={old_col: new_col})
+
+                logger.info(f"✅ AKShare申万指数成分股数据获取成功: {symbol}, {len(data)}条记录")
+                return data
+            else:
+                logger.warning(f"⚠️ AKShare申万指数成分股数据为空: {symbol}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ AKShare获取申万指数成分股数据失败: {symbol}, 错误: {e}")
+            return None
+
+    def get_sw_industry_list(self) -> Optional[pd.DataFrame]:
+        """
+        获取申万行业分类列表
+        
+        Returns:
+            pd.DataFrame: 申万行业分类列表
+        """
+        if not self.connected:
+            logger.error(f"❌ AKShare未连接，无法获取申万行业分类")
+            return None
+
+        try:
+            logger.info(f"📊 AKShare获取申万行业分类列表")
+
+            # 使用线程超时包装
+            import threading
+            result = [None]
+            exception = [None]
+
+            def fetch_sw_industry_list():
+                try:
+                    # 使用AkShare官方API获取申万三级行业信息
+                    result[0] = self.ak.sw_index_third_info()
+                except Exception as e:
+                    # 如果API调用失败，使用备用数据
+                    logger.warning(f"⚠️ AkShare API调用失败，使用备用数据: {e}")
+                    sw_industries = [
+                        {'code': '801010', 'name': '农林牧渔', 'level': 1},
+                        {'code': '801020', 'name': '采掘', 'level': 1},
+                        {'code': '801030', 'name': '化工', 'level': 1},
+                        {'code': '801040', 'name': '钢铁', 'level': 1},
+                        {'code': '801050', 'name': '有色金属', 'level': 1},
+                        {'code': '801080', 'name': '电子', 'level': 1},
+                        {'code': '801110', 'name': '家用电器', 'level': 1},
+                        {'code': '801120', 'name': '食品饮料', 'level': 1},
+                        {'code': '801130', 'name': '纺织服装', 'level': 1},
+                        {'code': '801140', 'name': '轻工制造', 'level': 1},
+                        {'code': '801150', 'name': '医药生物', 'level': 1},
+                        {'code': '801160', 'name': '公用事业', 'level': 1},
+                        {'code': '801170', 'name': '交通运输', 'level': 1},
+                        {'code': '801180', 'name': '房地产', 'level': 1},
+                        {'code': '801200', 'name': '商业贸易', 'level': 1},
+                        {'code': '801210', 'name': '休闲服务', 'level': 1},
+                        {'code': '801230', 'name': '综合', 'level': 1},
+                        {'code': '801710', 'name': '建筑材料', 'level': 1},
+                        {'code': '801720', 'name': '建筑装饰', 'level': 1},
+                        {'code': '801730', 'name': '电气设备', 'level': 1},
+                        {'code': '801740', 'name': '国防军工', 'level': 1},
+                        {'code': '801750', 'name': '计算机', 'level': 1},
+                        {'code': '801760', 'name': '传媒', 'level': 1},
+                        {'code': '801770', 'name': '通信', 'level': 1},
+                        {'code': '801780', 'name': '银行', 'level': 1},
+                        {'code': '801790', 'name': '非银金融', 'level': 1},
+                        {'code': '801880', 'name': '汽车', 'level': 1},
+                        {'code': '801890', 'name': '机械设备', 'level': 1}
+                    ]
+                    result[0] = pd.DataFrame(sw_industries)
+
+            # 启动线程
+            thread = threading.Thread(target=fetch_sw_industry_list)
+            thread.daemon = True
+            thread.start()
+
+            # 等待10秒
+            thread.join(timeout=10)
+
+            if thread.is_alive():
+                logger.warning(f"⚠️ AKShare申万行业分类获取超时（10秒）")
+                raise Exception(f"申万行业分类获取超时（10秒）")
+            elif exception[0]:
+                raise exception[0]
+            else:
+                data = result[0]
+
+            if data is not None and not data.empty:
+                logger.info(f"✅ AKShare申万行业分类获取成功: {len(data)}个行业")
+                return data
+            else:
+                logger.warning(f"⚠️ AKShare申万行业分类数据为空")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ AKShare获取申万行业分类失败: {e}")
+            return None
+
+    def get_sw_industry_constituents(self, industry_code: str) -> Optional[pd.DataFrame]:
+        """
+        获取申万行业成分股数据（基于AkShare官方API）
+        
+        Args:
+            industry_code: 申万行业代码（如：801010）
+            
+        Returns:
+            pd.DataFrame: 申万行业成分股数据
+        """
+        if not self.connected:
+            logger.error(f"❌ AKShare未连接，无法获取申万行业成分股数据")
+            return None
+
+        try:
+            logger.info(f"📊 AKShare获取申万行业成分股数据: {industry_code}")
+
+            # 使用线程超时包装
+            import threading
+            result = [None]
+            exception = [None]
+
+            def fetch_sw_constituents():
+                try:
+                    # 使用AkShare官方API获取申万三级行业成分股
+                    result[0] = self.ak.sw_index_third_cons(symbol=industry_code)
+                except Exception as e:
+                    exception[0] = e
+
+            # 启动线程
+            thread = threading.Thread(target=fetch_sw_constituents)
+            thread.daemon = True
+            thread.start()
+
+            # 等待60秒
+            thread.join(timeout=60)
+
+            if thread.is_alive():
+                # 超时了
+                logger.warning(f"⚠️ AKShare申万行业成分股获取超时（60秒）: {industry_code}")
+                raise Exception(f"申万行业成分股获取超时（60秒）: {industry_code}")
+            elif exception[0]:
+                # 有异常
+                raise exception[0]
+            else:
+                # 成功
+                data = result[0]
+
+            if data is not None and not data.empty:
+                logger.info(f"✅ AKShare申万行业成分股获取成功: {industry_code}, {len(data)}条记录")
+                return data
+            else:
+                logger.warning(f"⚠️ AKShare申万行业成分股数据为空: {industry_code}")
+                return None
+
+        except Exception as e:
+            logger.error(f"❌ AKShare获取申万行业成分股失败: {industry_code}, 错误: {e}")
+            return None
 
 def get_akshare_provider() -> AKShareProvider:
     """获取AKShare提供器实例"""
@@ -623,3 +972,525 @@ def get_stock_news_em(symbol: str) -> pd.DataFrame:
         elapsed_time = (datetime.now() - start_time).total_seconds()
         logger.error(f"[东方财富新闻] ❌ 获取失败: {symbol}, 错误: {e}, 耗时: {elapsed_time:.2f}秒")
         return pd.DataFrame()
+
+
+# 申万指数数据便捷函数
+
+def get_sw_index_hist_akshare(symbol: str, period: str = "day", 
+                             start_date: str = None, end_date: str = None,
+                             use_cache: bool = True) -> str:
+    """
+    使用AKShare获取申万指数历史数据的便捷函数（集成缓存）
+    
+    Args:
+        symbol: 申万指数代码（如：801010, 801193）
+        period: 数据周期（"day", "week", "month"）
+        start_date: 开始日期（格式：YYYY-MM-DD）
+        end_date: 结束日期（格式：YYYY-MM-DD）
+        use_cache: 是否使用缓存
+    
+    Returns:
+        str: 格式化的申万指数数据
+    """
+    try:
+        from .cache_manager import get_cache
+        
+        cache = get_cache() if use_cache else None
+        cached_data = None
+        
+        # 检查缓存
+        if cache and use_cache:
+            cache_key = cache.find_cached_sw_index_data(
+                symbol=symbol, 
+                start_date=start_date, 
+                end_date=end_date,
+                data_source='akshare'
+            )
+            if cache_key:
+                cached_data = cache.load_sw_index_data(cache_key)
+        
+        # 如果有缓存数据，使用缓存
+        if cached_data is not None:
+            if isinstance(cached_data, pd.DataFrame):
+                return format_sw_index_data_akshare(symbol, cached_data, period, start_date, end_date)
+            else:
+                return cached_data  # 如果是字符串格式，直接返回
+        
+        # 否则从AKShare获取新数据
+        provider = get_akshare_provider()
+        data = provider.get_sw_index_hist(symbol, period, start_date, end_date)
+        
+        if data is not None and not data.empty:
+            # 保存到缓存
+            if cache and use_cache:
+                cache.save_sw_index_data(
+                    symbol=symbol,
+                    data=data,
+                    start_date=start_date,
+                    end_date=end_date,
+                    data_source='akshare'
+                )
+            
+            return format_sw_index_data_akshare(symbol, data, period, start_date, end_date)
+        else:
+            return f"❌ 无法获取申万指数 {symbol} 的AKShare数据"
+    
+    except Exception as e:
+        logger.error(f"❌ AKShare申万指数数据获取失败: {e}")
+        return f"❌ AKShare申万指数数据获取失败: {e}"
+
+
+def get_sw_components_akshare(symbol: str, use_cache: bool = True) -> str:
+    """
+    使用AKShare获取申万指数成分股的便捷函数（集成缓存）
+    
+    Args:
+        symbol: 申万指数代码（如：801010, 801193）
+        use_cache: 是否使用缓存
+    
+    Returns:
+        str: 格式化的申万指数成分股数据
+    """
+    try:
+        from .cache_manager import get_cache
+        
+        cache = get_cache() if use_cache else None
+        cached_data = None
+        
+        # 检查缓存
+        if cache and use_cache:
+            cache_key = cache.find_cached_sw_industry_data(
+                data_type='sw_components_data',
+                data_key=symbol,
+                data_source='akshare'
+            )
+            if cache_key:
+                cached_data = cache.load_sw_industry_data(cache_key)
+        
+        # 如果有缓存数据，使用缓存
+        if cached_data is not None:
+            if isinstance(cached_data, pd.DataFrame):
+                return format_sw_components_data_akshare(symbol, cached_data)
+            else:
+                return cached_data  # 如果是字符串格式，直接返回
+        
+        # 否则从AKShare获取新数据
+        provider = get_akshare_provider()
+        data = provider.get_sw_components(symbol)
+        
+        if data is not None and not data.empty:
+            # 保存到缓存
+            if cache and use_cache:
+                cache.save_sw_industry_data(
+                    data_type='sw_components_data',
+                    data=data,
+                    data_key=symbol,
+                    data_source='akshare'
+                )
+            
+            return format_sw_components_data_akshare(symbol, data)
+        else:
+            return f"❌ 无法获取申万指数 {symbol} 成分股的AKShare数据"
+    
+    except Exception as e:
+        logger.error(f"❌ AKShare申万指数成分股数据获取失败: {e}")
+        return f"❌ AKShare申万指数成分股数据获取失败: {e}"
+
+
+def format_sw_index_data_akshare(symbol: str, data: pd.DataFrame, period: str, 
+                                start_date: str, end_date: str) -> str:
+    """
+    格式化AKShare申万指数数据为文本格式
+    
+    Args:
+        symbol: 申万指数代码
+        data: 申万指数数据DataFrame
+        period: 数据周期
+        start_date: 开始日期
+        end_date: 结束日期
+    
+    Returns:
+        str: 格式化的申万指数数据文本
+    """
+    if data is None or data.empty:
+        return f"❌ 无法获取申万指数 {symbol} 的AKShare数据"
+    
+    try:
+        # 获取指数基本信息（根据代码映射）
+        sw_industry_map = {
+            '801010': '农林牧渔', '801020': '采掘', '801030': '化工', '801040': '钢铁',
+            '801050': '有色金属', '801080': '电子', '801110': '家用电器', '801120': '食品饮料',
+            '801130': '纺织服装', '801140': '轻工制造', '801150': '医药生物', '801160': '公用事业',
+            '801170': '交通运输', '801180': '房地产', '801200': '商业贸易', '801210': '休闲服务',
+            '801230': '综合', '801710': '建筑材料', '801720': '建筑装饰', '801730': '电气设备',
+            '801740': '国防军工', '801750': '计算机', '801760': '传媒', '801770': '通信',
+            '801780': '银行', '801790': '非银金融', '801880': '汽车', '801890': '机械设备'
+        }
+        
+        index_name = sw_industry_map.get(symbol, f'申万指数{symbol}')
+        
+        # 计算统计信息
+        latest_price = data['Close'].iloc[-1]
+        price_change = data['Close'].iloc[-1] - data['Close'].iloc[0]
+        price_change_pct = (price_change / data['Close'].iloc[0]) * 100
+        
+        avg_volume = data['Volume'].mean() if 'Volume' in data.columns else 0
+        max_price = data['High'].max()
+        min_price = data['Low'].min()
+        
+        # 格式化输出
+        period_desc = {"day": "日线", "week": "周线", "month": "月线"}.get(period, period)
+        
+        formatted_text = f"""
+📊 申万指数数据报告 (AKShare)
+================
+
+指数信息:
+- 代码: {symbol}
+- 名称: {index_name}
+- 分类: 申万一级行业指数
+- 数据周期: {period_desc}
+
+价格信息:
+- 最新价格: {latest_price:.3f}点
+- 期间涨跌: {price_change:+.3f}点 ({price_change_pct:+.2f}%)
+- 期间最高: {max_price:.3f}点
+- 期间最低: {min_price:.3f}点
+
+交易信息:
+- 数据期间: {start_date or '历史数据'} 至 {end_date or '最新'}
+- 数据条数: {len(data)}条
+- 平均成交量: {avg_volume:,.0f}手
+
+最近5个交易周期:
+"""
+        
+        # 添加最近5个周期的数据
+        recent_data = data.tail(5)
+        for _, row in recent_data.iterrows():
+            date = row['Date'].strftime('%Y-%m-%d') if 'Date' in row else row.name.strftime('%Y-%m-%d')
+            volume = row.get('Volume', 0)
+            formatted_text += f"- {date}: 开盘{row['Open']:.3f}, 收盘{row['Close']:.3f}, 成交量{volume:,.0f}\n"
+        
+        formatted_text += f"\n数据来源: AKShare (申万指数)\n"
+        
+        return formatted_text
+    
+    except Exception as e:
+        logger.error(f"❌ 格式化AKShare申万指数数据失败: {e}")
+        return f"❌ AKShare申万指数数据格式化失败: {symbol}"
+
+
+def format_sw_components_data_akshare(symbol: str, data: pd.DataFrame) -> str:
+    """
+    格式化AKShare申万指数成分股数据为文本格式
+    
+    Args:
+        symbol: 申万指数代码
+        data: 申万指数成分股数据DataFrame
+    
+    Returns:
+        str: 格式化的申万指数成分股数据文本
+    """
+    if data is None or data.empty:
+        return f"❌ 无法获取申万指数 {symbol} 成分股的AKShare数据"
+    
+    try:
+        # 获取指数基本信息
+        sw_industry_map = {
+            '801010': '农林牧渔', '801020': '采掘', '801030': '化工', '801040': '钢铁',
+            '801050': '有色金属', '801080': '电子', '801110': '家用电器', '801120': '食品饮料',
+            '801130': '纺织服装', '801140': '轻工制造', '801150': '医药生物', '801160': '公用事业',
+            '801170': '交通运输', '801180': '房地产', '801200': '商业贸易', '801210': '休闲服务',
+            '801230': '综合', '801710': '建筑材料', '801720': '建筑装饰', '801730': '电气设备',
+            '801740': '国防军工', '801750': '计算机', '801760': '传媒', '801770': '通信',
+            '801780': '银行', '801790': '非银金融', '801880': '汽车', '801890': '机械设备'
+        }
+        
+        index_name = sw_industry_map.get(symbol, f'申万指数{symbol}')
+        
+        # 格式化输出
+        formatted_text = f"""
+📈 申万指数成分股报告 (AKShare)
+================
+
+指数信息:
+- 代码: {symbol}
+- 名称: {index_name}
+- 成分股数量: {len(data)}只
+
+权重分布:
+- 前10大权重股占比: {data.head(10)['Weight'].sum() if 'Weight' in data.columns else 'N/A'}%
+- 平均权重: {data['Weight'].mean():.3f}% (如果有权重数据)
+
+前20大成分股:
+"""
+        
+        # 添加前20只股票的详细信息
+        top_stocks = data.head(20)
+        for _, row in top_stocks.iterrows():
+            rank = row.get('Rank', '?')
+            code = row.get('Code', '?')
+            name = row.get('Name', '?')
+            weight = row.get('Weight', 0)
+            date = row.get('Date', '?')
+            
+            if weight > 0:
+                formatted_text += f"- {rank}. {code} {name}: {weight:.3f}% (计入日期: {date})\n"
+            else:
+                formatted_text += f"- {rank}. {code} {name} (计入日期: {date})\n"
+        
+        if len(data) > 20:
+            formatted_text += f"\n... 还有 {len(data) - 20} 只成分股\n"
+        
+        formatted_text += f"\n数据来源: AKShare (申万指数成分股)\n"
+        
+        return formatted_text
+    
+    except Exception as e:
+        logger.error(f"❌ 格式化AKShare申万指数成分股数据失败: {e}")
+        return f"❌ AKShare申万指数成分股数据格式化失败: {symbol}"
+
+
+# 申万行业数据便捷函数（基于AkShare优先策略）
+
+def get_sw_industry_list_akshare(use_cache: bool = True) -> str:
+    """
+    使用AKShare获取申万行业分类列表的便捷函数（集成缓存）
+    
+    Args:
+        use_cache: 是否使用缓存
+        
+    Returns:
+        str: 格式化的申万行业分类列表
+    """
+    try:
+        from .cache_manager import CacheManager
+        cache = CacheManager()
+        
+        # 检查缓存
+        if use_cache:
+            cache_key = cache.find_cached_sw_industry_data(
+                data_type='sw_industry_list',
+                symbol='ALL'
+            )
+            
+            if cache_key:
+                cached_data = cache.load_sw_industry_data(cache_key)
+                if cached_data is not None and not cached_data.empty:
+                    logger.info(f"🎯 使用缓存的申万行业分类列表")
+                    return format_sw_industry_list_akshare(cached_data)
+        
+        # 获取新数据
+        provider = AKShareProvider()
+        data = provider.get_sw_industry_list()
+        
+        if data is not None and not data.empty:
+            # 保存到缓存
+            if use_cache:
+                cache.save_sw_industry_data(
+                    data_type='sw_industry_list',
+                    symbol='ALL',
+                    data=data
+                )
+            
+            return format_sw_industry_list_akshare(data)
+        else:
+            return "❌ 无法获取申万行业分类的AKShare数据"
+            
+    except Exception as e:
+        logger.error(f"❌ AKShare申万行业分类获取失败: {e}")
+        return f"❌ AKShare申万行业分类获取失败: {e}"
+
+
+def get_sw_industry_constituents_akshare(industry_code: str, use_cache: bool = True) -> str:
+    """
+    使用AKShare获取申万行业成分股的便捷函数（集成缓存）
+    
+    Args:
+        industry_code: 申万行业代码（如：801010）
+        use_cache: 是否使用缓存
+        
+    Returns:
+        str: 格式化的申万行业成分股数据
+    """
+    try:
+        from .cache_manager import CacheManager
+        cache = CacheManager()
+        
+        # 检查缓存
+        if use_cache:
+            cache_key = cache.find_cached_sw_industry_data(
+                data_type='sw_constituents_data',
+                symbol=industry_code
+            )
+            
+            if cache_key:
+                cached_data = cache.load_sw_industry_data(cache_key)
+                if cached_data is not None and not cached_data.empty:
+                    logger.info(f"🎯 使用缓存的申万行业成分股数据: {industry_code}")
+                    return format_sw_industry_constituents_akshare(industry_code, cached_data)
+        
+        # 获取新数据
+        provider = AKShareProvider()
+        data = provider.get_sw_industry_constituents(industry_code)
+        
+        if data is not None and not data.empty:
+            # 保存到缓存
+            if use_cache:
+                cache.save_sw_industry_data(
+                    data_type='sw_constituents_data',
+                    symbol=industry_code,
+                    data=data
+                )
+            
+            return format_sw_industry_constituents_akshare(industry_code, data)
+        else:
+            return f"❌ 无法获取申万行业 {industry_code} 成分股的AKShare数据"
+            
+    except Exception as e:
+        logger.error(f"❌ AKShare申万行业成分股获取失败: {e}")
+        return f"❌ AKShare申万行业成分股获取失败: {e}"
+
+
+def format_sw_industry_list_akshare(data: pd.DataFrame) -> str:
+    """
+    格式化AKShare申万行业分类列表为文本格式
+    
+    Args:
+        data: 申万行业分类数据DataFrame
+        
+    Returns:
+        str: 格式化的申万行业分类列表文本
+    """
+    if data is None or data.empty:
+        return "❌ 无法获取申万行业分类的AKShare数据"
+    
+    try:
+        formatted_text = f"""
+📊 申万行业分类列表 (AKShare)
+{'='*50}
+
+"""      
+        
+        # 添加行业分类统计信息
+        formatted_text += f"📈 行业分类统计:\n"
+        formatted_text += f"- 总行业数量: {len(data)}\n"
+        
+        # 检查数据列名并标准化
+        data_columns = list(data.columns)
+        code_col = next((col for col in data_columns if '代码' in col or 'code' in col.lower()), None)
+        name_col = next((col for col in data_columns if '名称' in col or 'name' in col.lower()), None)
+        count_col = next((col for col in data_columns if '成份' in col or '个数' in col), None)
+        pe_col = next((col for col in data_columns if '市盈率' in col), None)
+        
+        if code_col and name_col:
+            formatted_text += f"\n📋 行业详细列表:\n"
+            formatted_text += f"{'行业代码':<10} {'行业名称':<20} {'成份数':<8}"
+            
+            if pe_col:
+                formatted_text += f" {'市盈率':<10}"
+            formatted_text += "\n" + "-"*60 + "\n"
+            
+            for _, row in data.head(20).iterrows():  # 显示前20个行业
+                code = str(row[code_col]) if code_col else 'N/A'
+                name = str(row[name_col]) if name_col else 'N/A'
+                count = str(row[count_col]) if count_col and pd.notna(row[count_col]) else 'N/A'
+                
+                formatted_text += f"{code:<10} {name:<20} {count:<8}"
+                
+                if pe_col and pd.notna(row[pe_col]):
+                    pe_value = f"{row[pe_col]:.2f}" if isinstance(row[pe_col], (int, float)) else str(row[pe_col])
+                    formatted_text += f" {pe_value:<10}"
+                    
+                formatted_text += "\n"
+                
+            if len(data) > 20:
+                formatted_text += f"... (显示前20个，共{len(data)}个行业)\n"
+        else:
+            # 如果列名不匹配，显示原始数据结构
+            formatted_text += f"\n📋 数据结构:\n"
+            formatted_text += f"列名: {', '.join(data_columns)}\n"
+            formatted_text += f"\n前5行数据:\n{data.head().to_string()}\n"
+            
+        formatted_text += f"\n数据来源: AKShare (申万行业分类)\n"
+        formatted_text += f"获取时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        
+        return formatted_text
+        
+    except Exception as e:
+        logger.error(f"❌ 格式化AKShare申万行业分类数据失败: {e}")
+        return f"❌ AKShare申万行业分类数据格式化失败"
+
+
+def format_sw_industry_constituents_akshare(industry_code: str, data: pd.DataFrame) -> str:
+    """
+    格式化AKShare申万行业成分股数据为文本格式
+    
+    Args:
+        industry_code: 申万行业代码
+        data: 申万行业成分股数据DataFrame
+        
+    Returns:
+        str: 格式化的申万行业成分股数据文本
+    """
+    if data is None or data.empty:
+        return f"❌ 无法获取申万行业 {industry_code} 成分股的AKShare数据"
+    
+    try:
+        # 获取行业名称
+        industry_name = "未知行业"
+        if '申万3级' in data.columns and not data.empty:
+            industry_name = data.iloc[0]['申万3级']
+        elif '申万2级' in data.columns and not data.empty:
+            industry_name = data.iloc[0]['申万2级']
+        elif '申万1级' in data.columns and not data.empty:
+            industry_name = data.iloc[0]['申万1级']
+            
+        formatted_text = f"""
+📈 申万行业成分股报告 (AKShare)
+{'='*50}
+
+📊 行业信息:
+- 行业代码: {industry_code}
+- 行业名称: {industry_name}
+- 成分股数量: {len(data)}
+
+"""      
+        
+        # 添加成分股列表
+        if not data.empty:
+            formatted_text += f"📋 主要成分股（前15只）:\n"
+            formatted_text += f"{'股票代码':<10} {'股票名称':<15} {'价格':<8} {'市值':<12} {'市盈率':<8}\n"
+            formatted_text += "-"*60 + "\n"
+            
+            for _, row in data.head(15).iterrows():
+                code = str(row.get('股票代码', 'N/A'))
+                name = str(row.get('股票简称', 'N/A'))[:12]  # 限制长度
+                price = f"{row.get('价格', 0):.2f}" if pd.notna(row.get('价格')) else 'N/A'
+                market_cap = f"{row.get('市值', 0):.0f}亿" if pd.notna(row.get('市值')) else 'N/A'
+                pe_ratio = f"{row.get('市盈率', 0):.2f}" if pd.notna(row.get('市盈率')) else 'N/A'
+                
+                formatted_text += f"{code:<10} {name:<15} {price:<8} {market_cap:<12} {pe_ratio:<8}\n"
+            
+            if len(data) > 15:
+                formatted_text += f"... (显示前15只，共{len(data)}只成分股)\n"
+                
+            # 添加行业统计信息
+            if '市盈率' in data.columns:
+                avg_pe = data['市盈率'].dropna().mean()
+                formatted_text += f"\n📊 行业统计:\n"
+                formatted_text += f"- 平均市盈率: {avg_pe:.2f}\n"
+                
+            if '市值' in data.columns:
+                total_market_cap = data['市值'].dropna().sum()
+                formatted_text += f"- 总市值: {total_market_cap:.0f}亿元\n"
+            
+        formatted_text += f"\n数据来源: AKShare (申万行业成分股)\n"
+        formatted_text += f"获取时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        
+        return formatted_text
+        
+    except Exception as e:
+        logger.error(f"❌ 格式化AKShare申万行业成分股数据失败: {e}")
+        return f"❌ AKShare申万行业成分股数据格式化失败: {industry_code}"
